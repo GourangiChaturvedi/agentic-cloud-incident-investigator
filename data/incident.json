@@ -1,0 +1,15 @@
+
+{
+    "incident_id": "INC-001",
+    "incident_type": "high_cpu",
+    "cpu_usage_percent": 96,
+    "database_connections": 35,
+    "recent_deployment": true,
+    "logs": [
+        "CPU utilization exceeded 90%",
+        "Repeated request timeouts detected",
+        "Application response time increased"
+    ],
+    "expected_root_cause": "possible_application_overload",
+    "status": "investigating"
+}
