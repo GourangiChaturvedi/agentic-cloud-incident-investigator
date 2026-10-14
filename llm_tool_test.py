@@ -1,5 +1,6 @@
 
 import boto3
+import json
 
 from diagnostic_tools import (
     get_cpu_metrics,
@@ -28,6 +29,25 @@ TOOL_CONFIG = {
 }
 
 
+def run_rule_based_fallback():
+    """Run local diagnostics without calling the LLM."""
+    print("\nRunning rule-based fallback...")
+
+    try:
+        with open("data/incident.json", "r", encoding="utf-8") as file:
+            incident = json.load(file)
+
+        cpu_result = get_cpu_metrics(incident)
+        database_result = get_database_metrics(incident)
+        logs_result = analyze_logs(incident.get("logs", []))
+
+        print("CPU diagnostic:", cpu_result)
+        print("Database diagnostic:", database_result)
+        print("Log analysis:", logs_result)
+
+    except (OSError, json.JSONDecodeError, ValueError, TypeError) as error:
+        print("Fallback could not complete:", error)
+
 
 
 def main():
@@ -52,18 +72,25 @@ def main():
         }
     ]
 
-    response = client.converse(
-        modelId=MODEL_ID,
-        messages=messages,
-        inferenceConfig={
-            "maxTokens": 120,
-            "temperature": 0,
-        },
-        toolConfig={
-    **TOOL_CONFIG,
-    "toolChoice": {"auto": {}},
-},
-    )
+    
+    try:
+        response = client.converse(
+            modelId=MODEL_ID,
+            messages=messages,
+            inferenceConfig={
+                "maxTokens": 120,
+                "temperature": 0,
+            },
+            toolConfig={
+                **TOOL_CONFIG,
+                "toolChoice": {"auto": {}},
+            },
+        )
+    except Exception as error:
+        print(f"Bedrock request failed: {error}")
+        run_rule_based_fallback()
+        return
+
 
     assistant_message = response["output"]["message"]
     tool_use = next(
@@ -124,18 +151,25 @@ def main():
         ]
     )
 
-    final_response = client.converse(
-        modelId=MODEL_ID,
-        messages=messages,
-        inferenceConfig={
-            "maxTokens": 120,
-            "temperature": 0,
-        },
-        toolConfig={
-    **TOOL_CONFIG,
-    "toolChoice": {"auto": {}},
-},
-    )
+  
+    try:
+        final_response = client.converse(
+            modelId=MODEL_ID,
+            messages=messages,
+            inferenceConfig={
+                "maxTokens": 120,
+                "temperature": 0,
+            },
+            toolConfig={
+                **TOOL_CONFIG,
+                "toolChoice": {"auto": {}},
+            },
+        )
+    except Exception as error:
+        print(f"Bedrock follow-up request failed: {error}")
+        run_rule_based_fallback()
+        return
+
 
     
     print("\nNova Lite's explanation:")
