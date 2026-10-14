@@ -99,10 +99,24 @@ def main():
         },
     )
 
+    
     print("\nNova Lite's explanation:")
     for block in final_response["output"]["message"]["content"]:
         if "text" in block:
-            print(block["text"])
+            text = block["text"].strip()
+            
+            if "<thinking>" in text and "</thinking>" in text:
+                before = text.split("<thinking>", 1)[0]
+                after = text.split("</thinking>", 1)[1]
+                text = before + after
+                text = text.strip()
+
+            if "<response>" in text:
+                text = text.split("<response>", 1)[1]
+            if "</response>" in text:
+                text = text.split("</response>", 1)[0]
+
+            print(text.strip())
 
 
 if __name__ == "__main__":
