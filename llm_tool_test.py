@@ -1,12 +1,20 @@
 
 import boto3
 
-from diagnostic_tools import get_cpu_metrics
-from llm_tool_schema import CPU_TOOL_CONFIG
+from diagnostic_tools import get_cpu_metrics, get_database_metrics
+from llm_tool_schema import CPU_TOOL_CONFIG, DATABASE_TOOL_CONFIG
 
 
 REGION = "ap-southeast-2"
 MODEL_ID = "amazon.nova-lite-v1:0"
+
+TOOL_CONFIG = {
+    "tools": (
+        CPU_TOOL_CONFIG["tools"]
+        + DATABASE_TOOL_CONFIG["tools"]
+    )
+}
+
 
 
 def main():
@@ -19,9 +27,9 @@ def main():
                 {
                     "text": (
                         "Investigate this CPU incident. Use the "
-                        "get_cpu_metrics tool to check CPU usage "
-                        "for an incident with CPU utilization of 96%. "
-                        "Briefly explain the result."
+"get_cpu_metrics tool to check CPU usage "
+"for an incident with CPU utilization of 96%. "
+"Briefly explain the result."
                     )
                 }
             ],
@@ -36,9 +44,9 @@ def main():
             "temperature": 0,
         },
         toolConfig={
-            **CPU_TOOL_CONFIG,
-            "toolChoice": {"auto": {}},
-        },
+    **TOOL_CONFIG,
+    "toolChoice": {"auto": {}},
+},
     )
 
     assistant_message = response["output"]["message"]
@@ -58,12 +66,21 @@ def main():
                 print(block["text"])
         return
 
-    if tool_use["name"] != "get_cpu_metrics":
-        raise ValueError("Unexpected tool requested by the model.")
+    
+    # Execute the diagnostic tool requested by the model.
+    incident = tool_use["input"]["incident"]
 
-    # Python executes the diagnostic locally.
-    result = get_cpu_metrics(tool_use["input"]["incident"])
+    if tool_use["name"] == "get_cpu_metrics":
+        result = get_cpu_metrics(incident)
+    elif tool_use["name"] == "get_database_metrics":
+        result = get_database_metrics(incident)
+    else:
+        raise ValueError(
+            f"Unexpected tool requested: {tool_use['name']}"
+        )
+
     print("Local diagnostic result:", result)
+
 
     # Return the diagnostic result to Nova Lite.
     messages.extend(
@@ -94,9 +111,9 @@ def main():
             "temperature": 0,
         },
         toolConfig={
-            **CPU_TOOL_CONFIG,
-            "toolChoice": {"auto": {}},
-        },
+    **TOOL_CONFIG,
+    "toolChoice": {"auto": {}},
+},
     )
 
     
