@@ -1,19 +1,32 @@
 
 import boto3
 
-from diagnostic_tools import get_cpu_metrics, get_database_metrics
-from llm_tool_schema import CPU_TOOL_CONFIG, DATABASE_TOOL_CONFIG
+from diagnostic_tools import (
+    get_cpu_metrics,
+    get_database_metrics,
+    analyze_logs,
+)
+
+from llm_tool_schema import (
+    CPU_TOOL_CONFIG,
+    DATABASE_TOOL_CONFIG,
+    LOG_TOOL_CONFIG,
+)
+
 
 
 REGION = "ap-southeast-2"
 MODEL_ID = "amazon.nova-lite-v1:0"
 
+
 TOOL_CONFIG = {
     "tools": (
         CPU_TOOL_CONFIG["tools"]
         + DATABASE_TOOL_CONFIG["tools"]
+        + LOG_TOOL_CONFIG["tools"]
     )
 }
+
 
 
 
@@ -26,10 +39,13 @@ def main():
             "content": [
                 {
                     "text": (
-                        "Investigate this CPU incident. Use the "
-"get_cpu_metrics tool to check CPU usage "
-"for an incident with CPU utilization of 96%. "
-"Briefly explain the result."
+                       "Investigate this application incident. Use the "
+"analyze_logs tool to inspect these logs: "
+"['Repeated request timeouts detected', "
+"'Application response time increased', "
+"'Database connection failed']. "
+"Briefly explain the findings."
+
                     )
                 }
             ],
@@ -67,17 +83,22 @@ def main():
         return
 
     
+    
     # Execute the diagnostic tool requested by the model.
-    incident = tool_use["input"]["incident"]
+    tool_name = tool_use["name"]
+    tool_input = tool_use["input"]
 
-    if tool_use["name"] == "get_cpu_metrics":
-        result = get_cpu_metrics(incident)
-    elif tool_use["name"] == "get_database_metrics":
-        result = get_database_metrics(incident)
+    if tool_name == "get_cpu_metrics":
+        result = get_cpu_metrics(tool_input["incident"])
+    elif tool_name == "get_database_metrics":
+        result = get_database_metrics(tool_input["incident"])
+    elif tool_name == "analyze_logs":
+        result = analyze_logs(tool_input["logs"])
     else:
         raise ValueError(
-            f"Unexpected tool requested: {tool_use['name']}"
+            f"Unexpected tool requested: {tool_name}"
         )
+
 
     print("Local diagnostic result:", result)
 

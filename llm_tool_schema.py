@@ -70,3 +70,37 @@ DATABASE_TOOL_CONFIG = {
         }
     ]
 }
+
+
+LOG_TOOL_CONFIG = {
+    "tools": [
+        {
+            "toolSpec": {
+                "name": "analyze_logs",
+                "description": (
+                    "Analyze incident logs for errors, request timeouts, "
+                    "and increased application response times. "
+                    "Use this tool when investigating incident logs."
+                ),
+                "inputSchema": {
+                    "json": {
+                        "type": "object",
+                        "properties": {
+                            "logs": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                },
+                                "description": (
+                                    "A list of log messages from the incident."
+                                )
+                            }
+                        },
+                        "required": ["logs"]
+                    }
+                }
+            }
+        }
+    ]
+}
+
