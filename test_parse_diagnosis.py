@@ -1,5 +1,5 @@
 
-
+from llm_tool_test import evaluate_diagnosis
 
 import json
 
@@ -36,8 +36,31 @@ def test_missing_field():
     else:
         raise AssertionError("Invalid diagnosis was accepted.")
 
+def test_evaluate_diagnosis():
+    diagnosis = {
+        "probable_root_cause": "possible_application_overload",
+        "supporting_evidence": ["CPU at 96%"],
+        "uncertainty": "Other causes remain possible",
+        "confidence": "medium",
+    }
+
+    # Matching diagnosis should be correct.
+    result = evaluate_diagnosis(
+        diagnosis, "possible_application_overload"
+    )
+    assert result["correct"] is True
+
+    # Different diagnosis should be incorrect.
+    result = evaluate_diagnosis(
+        diagnosis, "database_connection_exhaustion"
+    )
+    assert result["correct"] is False
+
+    print("PASS: Diagnosis evaluation tests passed.")
+
 
 if __name__ == "__main__":
     test_valid_diagnosis()
     test_missing_field()
+    test_evaluate_diagnosis()
     print("\nAll diagnosis parser tests passed.")

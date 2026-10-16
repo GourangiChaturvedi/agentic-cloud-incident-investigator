@@ -104,3 +104,39 @@ LOG_TOOL_CONFIG = {
     ]
 }
 
+
+DEPLOYMENT_TOOL_CONFIG = {
+    "tools": [
+        {
+            "toolSpec": {
+                "name": "get_recent_deployments",
+                "description": (
+                    "Check whether a recent deployment occurred for an incident. "
+                    "Returns whether a deployment was detected. "
+                    "Use this tool when investigating whether a recent deployment "
+                    "may be related to an incident."
+                ),
+                "inputSchema": {
+                    "json": {
+                        "type": "object",
+                        "properties": {
+                            "incident": {
+                                "type": "object",
+                                "properties": {
+                                    "recent_deployment": {
+                                        "type": "boolean",
+                                        "description": (
+                                            "Whether a recent deployment occurred."
+                                        )
+                                    }
+                                },
+                                "required": ["recent_deployment"]
+                            }
+                        },
+                        "required": ["incident"]
+                    }
+                }
+            }
+        }
+    ]
+}

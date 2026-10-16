@@ -6,14 +6,15 @@ from diagnostic_tools import (
     get_cpu_metrics,
     get_database_metrics,
     analyze_logs,
+    get_recent_deployments,
 )
 
 from llm_tool_schema import (
     CPU_TOOL_CONFIG,
     DATABASE_TOOL_CONFIG,
     LOG_TOOL_CONFIG,
+    DEPLOYMENT_TOOL_CONFIG,
 )
-
 
 
 REGION = "ap-southeast-2"
@@ -25,6 +26,7 @@ TOOL_CONFIG = {
         CPU_TOOL_CONFIG["tools"]
         + DATABASE_TOOL_CONFIG["tools"]
         + LOG_TOOL_CONFIG["tools"]
+        + DEPLOYMENT_TOOL_CONFIG["tools"]
     )
 }
 
@@ -104,6 +106,22 @@ def parse_diagnosis(raw_text):
         raise ValueError("confidence must be low, medium, or high.")
 
     return diagnosis
+
+
+def evaluate_diagnosis(diagnosis, expected_root_cause):
+    """Compare the agent's diagnosis with the expected root cause."""
+    predicted = diagnosis["probable_root_cause"].strip().lower()
+    expected = expected_root_cause.strip().lower()
+
+    correct = predicted == expected
+
+    result = {
+        "predicted_root_cause": diagnosis["probable_root_cause"],
+        "expected_root_cause": expected_root_cause,
+        "correct": correct,
+    }
+
+    return result
 
 
 def main():
@@ -230,7 +248,6 @@ def main():
             tool_input = tool_use["input"]
 
             print(f"Running tool: {tool_name}")
-
             try:
                 if tool_name == "get_cpu_metrics":
                     result = get_cpu_metrics(tool_input["incident"])
@@ -241,12 +258,16 @@ def main():
                 elif tool_name == "analyze_logs":
                     result = analyze_logs(tool_input["logs"])
 
+                elif tool_name == "get_recent_deployments":
+                    result = get_recent_deployments(tool_input["incident"])
+
                 else:
                     result = {
                         "status": "error",
+                        "tool": tool_name,
+                        "data": {},
                         "message": f"Unknown tool: {tool_name}",
                     }
-
             except (KeyError, ValueError, TypeError) as error:
                 result = {
                     "status": "error",
