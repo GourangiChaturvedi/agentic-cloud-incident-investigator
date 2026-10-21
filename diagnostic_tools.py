@@ -296,15 +296,82 @@ def get_recent_deployments(incident):
     }
 
 
-def collect_diagnostic_evidence(incident):
-    """Run all diagnostic tools and collect their results."""
+def collect_diagnostic_evidence(incident, source="simulated"):
+    """Collect diagnostic evidence from simulated input or AWS."""
+
+    if source not in ("simulated", "aws"):
+        return {
+            "status": "error",
+            "tool": "collect_diagnostic_evidence",
+            "data": {
+                "source": source,
+                "evidence": [],
+                "errors": [],
+            },
+            "message": "Source must be 'simulated' or 'aws'.",
+        }
+
+    # Real AWS telemetry path
+    if source == "aws":
+        aws_results = [
+            get_aws_cpu_metrics(),
+            get_aws_log_evidence(
+                "/agentic-cloud-incident-investigator/test"
+            ),
+        ]
+
+        evidence = [
+            result for result in aws_results
+            if result["status"] == "success"
+        ]
+
+        unavailable = [
+            result for result in aws_results
+            if result["status"] == "unavailable"
+        ]
+
+        errors = [
+            result for result in aws_results
+            if result["status"] == "error"
+        ]
+
+        if errors:
+            status = "partial" if evidence or unavailable else "error"
+        elif evidence:
+            status = "success"
+        else:
+            status = "unavailable"
+
+        return {
+            "status": status,
+            "tool": "collect_diagnostic_evidence",
+            "data": {
+                "source": "aws",
+                "evidence": evidence,
+                "unavailable": unavailable,
+                "errors": errors,
+            },
+            "message": (
+                "AWS telemetry collected successfully."
+                if status == "success"
+                else "AWS telemetry is unavailable for the configured sources."
+                if status == "unavailable"
+                else "AWS evidence collection completed with errors or partial results."
+            ),
+        }
+
+    # Simulated-data path (preserved)
     validation = validate_incident(incident)
 
     if validation["status"] == "error":
         return {
             "status": "error",
             "tool": "collect_diagnostic_evidence",
-            "data": {"evidence": []},
+            "data": {
+                "source": "simulated",
+                "evidence": [],
+                "errors": [],
+            },
             "message": validation["message"],
         }
 
@@ -329,6 +396,7 @@ def collect_diagnostic_evidence(incident):
         "status": "success" if not errors else "partial",
         "tool": "collect_diagnostic_evidence",
         "data": {
+            "source": "simulated",
             "evidence": evidence,
             "errors": errors,
         },
@@ -338,7 +406,6 @@ def collect_diagnostic_evidence(incident):
             else "Some diagnostic tools failed; results are incomplete."
         ),
     }
-
 
 def record_investigation(incident, collection_result):
     """Create a structured record of a diagnostic investigation."""
@@ -372,4 +439,61 @@ def record_investigation(incident, collection_result):
         "evidence": evidence,
         "errors": errors,
         "message": collection_result.get("message", "No message provided."),
+    }
+
+
+def get_aws_cpu_metrics(region="ap-southeast-2", hours=1):
+    """Retrieve real EC2 CPU evidence from AWS CloudWatch."""
+    from aws_cloudwatch import get_ec2_cpu_metrics
+
+    result = get_ec2_cpu_metrics(region=region, hours=hours)
+
+    if result["status"] != "success":
+        return {
+            "status": "error",
+            "tool": "get_aws_cpu_metrics",
+            "data": {
+                "source": "aws_cloudwatch",
+                "region": region,
+                "metrics": [],
+            },
+            "message": result["message"],
+        }
+
+    return {
+        "status": "success" if result["metrics"] else "unavailable",
+        "tool": "get_aws_cpu_metrics",
+        "data": {
+            "source": "aws_cloudwatch",
+            "region": region,
+            "metrics": result["metrics"],
+            "metric_count": len(result["metrics"]),
+        },
+        "message": result["message"],
+    }
+
+
+def get_aws_log_evidence(log_group_name, region="ap-southeast-2", minutes=60):
+    """Collect real CloudWatch log events as diagnostic evidence."""
+    from aws_cloudwatch import get_cloudwatch_logs
+
+    result = get_cloudwatch_logs(
+        log_group_name=log_group_name,
+        region=region,
+        minutes=minutes,
+    )
+
+    status = result["status"]
+
+    return {
+        "status": status,
+        "tool": "get_aws_log_evidence",
+        "data": {
+            "source": "aws_cloudwatch_logs",
+            "region": region,
+            "log_group": log_group_name,
+            "events": result["events"],
+            "event_count": len(result["events"]),
+        },
+        "message": result["message"],
     }

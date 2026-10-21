@@ -1,0 +1,1 @@
+{"logGroupName": "/agentic-cloud-incident-investigator/test", "logStreamName": "incident-test-001", "logEvents": [{"timestamp": 1792476234215, "message": "ERROR: Request timeout detected"}, {"timestamp": 1792476234216, "message": "WARNING: Application response time increased"}, {"timestamp": 1792476234217, "message": "INFO: Synthetic incident test event"}]}
