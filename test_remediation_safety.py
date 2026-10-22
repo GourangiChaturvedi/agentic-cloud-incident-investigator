@@ -1,30 +1,9 @@
 
-def propose_remediation(diagnosis):
-    """Return a proposal only; never execute cloud actions."""
-    if not isinstance(diagnosis, dict):
-        raise ValueError("Diagnosis must be a dictionary.")
-
-    cause = diagnosis.get("probable_root_cause", "")
-    if not isinstance(cause, str) or not cause.strip():
-        raise ValueError("A probable root cause is required.")
-
-    if "cpu" in cause.lower() or "overload" in cause.lower():
-        action = (
-            "Review CPU utilization, request load, and application "
-            "performance before deciding whether to scale."
-        )
-    else:
-        action = (
-            "Gather more diagnostic evidence before selecting a "
-            "remediation action."
-        )
-
-    return {
-        "status": "proposed",
-        "action": action,
-        "requires_human_approval": True,
-        "executed": False,
-    }
+from remediation import (
+    propose_remediation,
+    validate_remediation_action,
+    record_approval,
+)
 
 
 def test_proposal_does_not_execute_actions():
@@ -48,7 +27,53 @@ def test_invalid_diagnosis_is_rejected():
     raise AssertionError("An empty diagnosis should be rejected.")
 
 
+def test_allowlist_rejects_unsafe_action():
+    try:
+        validate_remediation_action("delete_production_database")
+    except ValueError:
+        return
+
+    raise AssertionError("Unsafe action should be rejected.")
+
+
+def test_approval_and_rejection_never_execute_actions():
+    proposal = propose_remediation(
+        {"probable_root_cause": "CPU saturation"}
+    )
+
+    approved = record_approval(proposal, True)
+    rejected = record_approval(proposal, False)
+
+    assert approved["approval_status"] == "approved"
+    assert rejected["approval_status"] == "rejected"
+    assert approved["executed"] is False
+    assert rejected["executed"] is False
+
+
+def test_invalid_approval_is_rejected():
+    proposal = propose_remediation(
+        {"probable_root_cause": "CPU saturation"}
+    )
+
+    try:
+        record_approval(proposal, "yes")
+    except ValueError:
+        return
+
+    raise AssertionError("Invalid approval should be rejected.")
+
+
 if __name__ == "__main__":
-    test_proposal_does_not_execute_actions()
-    test_invalid_diagnosis_is_rejected()
-    print("Remediation safety tests passed.")
+    tests = [
+        test_proposal_does_not_execute_actions,
+        test_invalid_diagnosis_is_rejected,
+        test_allowlist_rejects_unsafe_action,
+        test_approval_and_rejection_never_execute_actions,
+        test_invalid_approval_is_rejected,
+    ]
+
+    for test in tests:
+        test()
+        print(f"PASS: {test.__name__}")
+
+    print(f"\nAll {len(tests)} remediation safety tests passed.")

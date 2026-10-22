@@ -1,3 +1,4 @@
 __pycache__/
 *.py[cod]
 .env
+remediation_audit.jsonl
