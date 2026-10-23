@@ -5,6 +5,7 @@ import time
 
 from diagnostic_tools import (
     get_cpu_metrics,
+    get_live_cpu_metrics,
     get_database_metrics,
     analyze_logs,
     get_recent_deployments,
@@ -33,7 +34,7 @@ TOOL_CONFIG = {
 
 
 def run_rule_based_fallback(incident=None):
-    """Run local diagnostics and return their results."""
+    """Run local simulated diagnostics and return their results."""
     print("\nRunning rule-based baseline...")
 
     try:
@@ -53,6 +54,7 @@ def run_rule_based_fallback(incident=None):
             cpu_result.get("status") == "success"
             and cpu_result.get("data", {}).get("assessment") == "high"
         )
+
         db_high = (
             database_result.get("status") == "success"
             and database_result.get("data", {}).get("assessment") == "high"
@@ -117,17 +119,18 @@ def run_rule_based_fallback(incident=None):
 
         print("\n=== Rule-Based Baseline Diagnosis ===")
         print(json.dumps(diagnosis, indent=2))
+
         return diagnosis
 
     except (OSError, json.JSONDecodeError, ValueError, TypeError) as error:
         print("Baseline could not complete:", error)
         return None
 
+
 def parse_diagnosis(raw_text):
     """Extract and validate the model's JSON diagnosis."""
     text = raw_text.strip()
 
-    # Remove optional XML-like wrappers.
     if "<diagnosis>" in text and "</diagnosis>" in text:
         text = text.split("<diagnosis>", 1)[1]
         text = text.split("</diagnosis>", 1)[0].strip()
@@ -136,13 +139,15 @@ def parse_diagnosis(raw_text):
         text = text.split("<response>", 1)[1]
         text = text.split("</response>", 1)[0].strip()
 
-    # Handle JSON enclosed in Markdown code fences.
     if text.startswith("```"):
         lines = text.splitlines()
+
         if lines and lines[0].startswith("```"):
             lines = lines[1:]
+
         if lines and lines[-1].strip() == "```":
             lines = lines[:-1]
+
         text = "\n".join(lines).strip()
 
     diagnosis = json.loads(text)
@@ -158,6 +163,7 @@ def parse_diagnosis(raw_text):
     }
 
     missing = required_fields - diagnosis.keys()
+
     if missing:
         raise ValueError(
             f"Diagnosis is missing fields: {sorted(missing)}"
@@ -251,11 +257,13 @@ def evaluate_diagnosis(diagnosis, expected_root_cause):
         ),
     }
 
+
 def main():
     # Step 1: Load incident data.
     try:
         with open("data/incident.json", "r", encoding="utf-8") as file:
             incident = json.load(file)
+
     except (OSError, json.JSONDecodeError) as error:
         print(f"Could not load incident data: {error}")
         return
@@ -275,46 +283,63 @@ def main():
 
     client = boto3.client("bedrock-runtime", region_name=REGION)
 
+    system_prompt = (
+        "You are an application incident investigator. "
+        "Treat AWS CloudWatch metrics as the authoritative source "
+        "for live CPU utilization. "
+        "CloudWatch CPU values are already expressed as percentages "
+"on a scale from 0 to 100. "
+"The maximum_cpu_percent field is already a percentage; "
+"never multiply it by 100. "
+"For example, maximum_cpu_percent=0.341 means approximately "
+"0.341 percent CPU utilization. "
+"Use the tool's assessment field directly when reporting "
+"the CPU assessment. "
+        "Only describe CPU as high when the observed maximum CPU "
+        "meets or exceeds 80 percent. "
+        "If live CPU metrics are available and their maximum is below "
+        "80%, do not describe CPU as high or saturated based on "
+        "simulated incident data. "
+        "Distinguish live AWS evidence from simulated logs, database "
+        "metrics, and deployment information. "
+        "Prioritize direct diagnostic evidence over temporal correlations. "
+        "When CPU is assessed as high and logs show timeouts or increased "
+        "response time, consider application or workload CPU saturation "
+        "as a hypothesis, not an automatically confirmed cause. "
+        "A detected recent deployment is contextual evidence only and "
+        "must not be preferred without evidence connecting it to the incident. "
+        "Use diagnostic tools to investigate the incident. "
+        "Call each relevant tool with the appropriate input. "
+        "Do not repeat a tool with identical input when its "
+        "result is already available. "
+        "Distinguish direct observations from hypotheses. "
+        "Do not claim that a recent deployment caused an incident "
+        "based only on the fact that a deployment occurred. "
+        "Do not claim a diagnostic was run unless its result "
+        "is available. "
+        "When evidence is incomplete or competing explanations "
+        "remain possible, explicitly state the uncertainty and "
+        "use medium or low confidence. "
+        "Use high confidence only when multiple independent "
+        "pieces of evidence strongly support the same cause. "
+        "Return only a valid JSON object. Do not include Markdown "
+        "code fences, introductory text, or explanations outside JSON. "
+        "Return a JSON diagnosis with exactly these fields: "
+        '"probable_root_cause", "supporting_evidence", '
+        '"uncertainty", and "confidence". '
+        "Supporting evidence must be based on incident data "
+        "or actual diagnostic results, and must identify which "
+        "evidence is live AWS data versus simulated data. "
+        "If the cause cannot be established from the available "
+        "evidence, state that it is inconclusive.\n\n"
+        "Incident data:\n"
+        + json.dumps(agent_incident)
+    )
+
     messages = [
         {
             "role": "user",
-            "content": [
-                {
-                    "text": (
-                        "You are an application incident investigator. "
-                        "Prioritize direct diagnostic evidence over temporal correlations. "
-"When CPU is assessed as high and logs show timeouts or increased "
-"response time, explicitly consider application or workload CPU "
-"saturation as a leading hypothesis. "
-"A detected recent deployment is contextual evidence only and "
-"must not be preferred without evidence connecting it to the incident. "
-"Use diagnostic tools to investigate the incident. "
-"Call each relevant tool with the appropriate input. "
-"Do not repeat a tool with identical input when its "
-"result is already available. "
-"Use tool results as evidence, and distinguish direct "
-"observations from hypotheses. "
-"Do not claim that a recent deployment caused an incident "
-"based only on the fact that a deployment occurred. "
-"Do not claim a diagnostic was run unless its result "
-"is available. "
-"When evidence is incomplete or competing explanations "
-"remain possible, explicitly state the uncertainty and "
-"use medium or low confidence. "
-"Use high confidence only when multiple independent "
-"pieces of evidence strongly support the same cause. "
-"Return a JSON diagnosis with exactly these fields: "
-'"probable_root_cause", "supporting_evidence", '
-'"uncertainty", and "confidence". '
-"Supporting evidence must be based on the incident data "
-"or actual diagnostic results. "
-"If the cause cannot be established, say so explicitly.\n\n"
-"Incident data:\n"
-
-                        + json.dumps(agent_incident)
-                    )
-                }
-            ],
+            "content": [{"text": system_prompt}],
         }
     ]
 
@@ -328,7 +353,7 @@ def main():
                 modelId=MODEL_ID,
                 messages=messages,
                 inferenceConfig={
-                    "maxTokens": 400,
+                    "maxTokens": 800,
                     "temperature": 0,
                 },
                 toolConfig={
@@ -336,6 +361,7 @@ def main():
                     "toolChoice": {"auto": {}},
                 },
             )
+
         except Exception as error:
             print(f"Bedrock request failed: {error}")
             print("Agent investigation failed; running baseline only.")
@@ -343,6 +369,10 @@ def main():
             return
 
         assistant_message = response["output"]["message"]
+        print("Stop reason:", response.get("stopReason"))
+        print("Usage:", response.get("usage"))
+        print("Response content:", assistant_message.get("content"))
+
         tool_uses = [
             block["toolUse"]
             for block in assistant_message["content"]
@@ -370,6 +400,7 @@ def main():
                 try:
                     diagnosis = parse_diagnosis(raw_text)
                     break
+
                 except (json.JSONDecodeError, ValueError) as error:
                     print("Invalid diagnosis format:", error)
                     print("Raw model response:", raw_text)
@@ -381,19 +412,30 @@ def main():
 
             print(json.dumps(diagnosis, indent=2))
 
-            # Evaluate the agent against the expected label.
             agent_elapsed = time.perf_counter() - agent_start
 
+            # Evaluate only after a valid diagnosis exists.
             print("\n=== Agent Evaluation ===")
+
             if expected_root_cause:
                 agent_evaluation = evaluate_diagnosis(
-                    diagnosis, expected_root_cause
+                    diagnosis,
+                    expected_root_cause,
                 )
+
+                agent_evaluation["evaluation_note"] = (
+                    "The expected label comes from the simulated incident "
+                    "fixture, while the agent uses live AWS CPU metrics "
+                    "and simulated supporting evidence. This score is not "
+                    "an apples-to-apples comparison of the agent and baseline."
+                )
+
                 print(json.dumps(agent_evaluation, indent=2))
+
             else:
                 print("Evaluation skipped: expected label is missing.")
 
-            # Run the baseline on the exact same incident.
+            # Run the baseline on the same incident fixture.
             baseline_start = time.perf_counter()
             baseline_diagnosis = run_rule_based_fallback(incident)
             baseline_elapsed = time.perf_counter() - baseline_start
@@ -403,16 +445,20 @@ def main():
 
             if baseline_diagnosis and expected_root_cause:
                 baseline_evaluation = evaluate_diagnosis(
-                    baseline_diagnosis, expected_root_cause
+                    baseline_diagnosis,
+                    expected_root_cause,
                 )
+
                 print(
                     "Baseline evaluation:",
                     json.dumps(baseline_evaluation, indent=2),
                 )
+
                 print(
                     f"Baseline diagnostic time: "
                     f"{baseline_elapsed:.3f} seconds"
                 )
+
             elif not baseline_diagnosis:
                 print("Baseline evaluation unavailable.")
 
@@ -429,9 +475,10 @@ def main():
             tool_input = tool_use["input"]
 
             print(f"Running tool: {tool_name}")
+
             try:
                 if tool_name == "get_cpu_metrics":
-                    result = get_cpu_metrics(tool_input["incident"])
+                    result = get_live_cpu_metrics()
 
                 elif tool_name == "get_database_metrics":
                     result = get_database_metrics(tool_input["incident"])
@@ -449,9 +496,12 @@ def main():
                         "data": {},
                         "message": f"Unknown tool: {tool_name}",
                     }
+
             except (KeyError, ValueError, TypeError) as error:
                 result = {
                     "status": "error",
+                    "tool": tool_name,
+                    "data": {},
                     "message": str(error),
                 }
 

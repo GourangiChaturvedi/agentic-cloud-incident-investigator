@@ -1,11 +1,15 @@
-
 import streamlit as st
-
+import json
+from pathlib import Path
 from diagnostic_tools import (
     collect_diagnostic_evidence,
     record_investigation,
 )
 
+from remediation import (
+    propose_remediation,
+    record_approval,
+)
 st.set_page_config(
     page_title="Cloud Incident Investigator",
     page_icon="🔎",
@@ -418,6 +422,27 @@ if st.button("🔍 Investigate Incident", type="primary"):
             "to identify a probable root cause."
         )
 
+
+    # --------------------------------------------------
+    # Create a safe remediation proposal
+    # --------------------------------------------------
+
+    try:
+        diagnosis_for_remediation = {
+            "probable_root_cause": cause,
+        }
+
+        st.session_state["remediation_proposal"] = (
+            propose_remediation(diagnosis_for_remediation)
+        )
+
+        # A new investigation needs a new human decision.
+        st.session_state["remediation_decision"] = None
+
+    except Exception as exc:
+        st.session_state["remediation_proposal"] = None
+        st.error(f"Could not create remediation proposal: {exc}")
+
     # --------------------------------------------------
     # Diagnosis summary
     # --------------------------------------------------
@@ -598,3 +623,98 @@ if st.button("🔍 Investigate Incident", type="primary"):
     if errors:
         st.markdown("### Tool Errors")
         st.json(errors)
+
+# --------------------------------------------------
+# Remediation Recommendation Panel
+# --------------------------------------------------
+
+st.divider()
+st.subheader("Remediation Recommendation")
+
+proposal = st.session_state.get("remediation_proposal")
+
+if proposal is None:
+    st.info("Investigate an incident to generate a remediation proposal.")
+else:
+    st.markdown("**Proposed action**")
+    st.write(proposal["action"])
+
+    st.markdown("**Rationale**")
+    st.write(
+        "This recommendation is based on the investigation diagnosis: "
+        f"{cause if 'cause' in locals() else 'See the investigation results above.'}"
+    )
+
+    st.caption("This is a recommendation only. No cloud action will execute automatically.")
+    st.write(f"**Action ID:** `{proposal['action_id']}`")
+
+    decision = st.session_state.get("remediation_decision")
+
+    display_status = (
+    decision["status"] if decision is not None
+    else proposal["status"]
+)
+
+    st.write(f"**Proposal status:** {display_status}")
+    st.write("**Executed:** No")
+
+
+    if decision is None:
+        approve_col, reject_col = st.columns(2)
+
+        with approve_col:
+            if st.button("Approve Recommendation", key="approve_remediation"):
+                try:
+                    st.session_state["remediation_decision"] = record_approval(
+                        proposal, True
+                    )
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Approval could not be recorded: {exc}")
+
+        with reject_col:
+            if st.button("Reject Recommendation", key="reject_remediation"):
+                try:
+                    st.session_state["remediation_decision"] = record_approval(
+                        proposal, False
+                    )
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Rejection could not be recorded: {exc}")
+    else:
+        st.write(f"**Human decision:** {decision['approval_status'].title()}")
+        st.write(f"**Executed:** {'Yes' if decision.get('executed') else 'No'}")
+
+
+# --------------------------------------------------
+# Remediation Audit Trail
+# --------------------------------------------------
+
+st.divider()
+st.subheader("Remediation Audit Trail")
+
+audit_file = Path(__file__).with_name("remediation_audit.jsonl")
+
+if audit_file.exists():
+    with audit_file.open("r", encoding="utf-8") as file:
+        audit_lines = [
+            line.strip()
+            for line in file
+            if line.strip()
+        ]
+
+    if audit_lines:
+        audit_records = []
+
+        for line in audit_lines:
+            try:
+                audit_records.append(json.loads(line))
+            except json.JSONDecodeError:
+                st.warning("An invalid audit log entry was skipped.")
+
+        if audit_records:
+            st.json(audit_records[-10:])
+    else:
+        st.info("No audit events recorded yet.")
+else:
+    st.info("The audit log has not been created yet.")

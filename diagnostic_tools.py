@@ -196,6 +196,53 @@ def get_cpu_metrics(incident):
     }
 
 
+def get_live_cpu_metrics(region="ap-southeast-2", hours=1):
+    """Return real EC2 CPU evidence from AWS CloudWatch."""
+    result = get_aws_cpu_metrics(region=region, hours=hours)
+
+    if result.get("status") != "success":
+        return {
+            "status": result.get("status", "error"),
+            "tool": "get_cpu_metrics",
+            "data": result.get("data", {}),
+            "message": result.get(
+                "message", "Could not retrieve live CPU metrics."
+            ),
+        }
+
+    metrics = result.get("data", {}).get("metrics", [])
+
+    if not metrics:
+        return {
+            "status": "unavailable",
+            "tool": "get_cpu_metrics",
+            "data": {
+                "source": "aws_cloudwatch",
+                "metrics": [],
+                "metric_count": 0,
+            },
+            "message": "No live EC2 CPU datapoints were returned.",
+        }
+
+    return {
+        "status": "success",
+        "tool": "get_cpu_metrics",
+        "data": {
+            "source": "aws_cloudwatch",
+            "region": region,
+            "metrics": metrics,
+"metric_count": len(metrics),
+"maximum_cpu_percent": max(
+    metric["maximum_cpu"] for metric in metrics
+),
+"assessment": (
+    "high"
+    if max(metric["maximum_cpu"] for metric in metrics) >= 80
+    else "normal"
+),
+        },
+        "message": "Live AWS CPU metrics retrieved successfully.",
+    }
 
 def get_database_metrics(incident):
     """Return database metrics in the standardized diagnostic format."""

@@ -74,6 +74,7 @@ def propose_remediation(diagnosis):
     }
 
 
+
 def record_approval(proposal, approved):
     """Record a human decision without executing cloud actions."""
     if not isinstance(proposal, dict):
@@ -87,17 +88,20 @@ def record_approval(proposal, approved):
     if not isinstance(approved, bool):
         raise ValueError("Approval must be True or False.")
 
+    decision = "approved" if approved else "rejected"
+
     result = proposal.copy()
-    result["approval_status"] = "approved" if approved else "rejected"
+    result["status"] = decision
+    result["approval_status"] = decision
     result["executed"] = False
 
     write_audit_event(
-    "approval_decision",
-    {
-        "action_id": result["action_id"],
-        "approval_status": result["approval_status"],
-        "executed": False,
-    },
-)
+        "approval_decision",
+        {
+            "action_id": result["action_id"],
+            "approval_status": decision,
+            "executed": False,
+        },
+    )
 
     return result

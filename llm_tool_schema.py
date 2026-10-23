@@ -1,33 +1,20 @@
-
 CPU_TOOL_CONFIG = {
     "tools": [
         {
             "toolSpec": {
                 "name": "get_cpu_metrics",
                 "description": (
-                    "Check CPU usage for an incident. "
-                    "Returns the CPU percentage and whether usage is high. "
+                    "Retrieve actual EC2 CPU utilization metrics from "
+                    "AWS CloudWatch in the configured AWS region. "
+                    "Do not infer live CPU utilization from incident "
+                    "fixture data. The returned metrics are the source "
+                    "of truth for observed CPU utilization. "
                     "Use this tool when investigating CPU-related incidents."
                 ),
                 "inputSchema": {
                     "json": {
                         "type": "object",
-                        "properties": {
-                            "incident": {
-                                "type": "object",
-                                "properties": {
-                                    "cpu_usage_percent": {
-                                        "type": "number",
-                                        "description": (
-                                            "CPU utilization percentage, "
-                                            "from 0 to 100."
-                                        )
-                                    }
-                                },
-                                "required": ["cpu_usage_percent"]
-                            }
-                        },
-                        "required": ["incident"]
+                        "properties": {},
                     }
                 }
             }
