@@ -1,0 +1,51 @@
+{
+  "experiment": "rule_based_baseline",
+  "started_at_utc": "2026-10-26T00:40:04.522411+00:00",
+  "finished_at_utc": "2026-10-26T00:40:04.577528+00:00",
+  "dataset_path": "data\\evaluation_cases.json",
+  "dataset_sha256": "aaf5b42ae2e1ec524b7966ff996b4546160dbebd7af194b0b4258c0000a3d2fb",
+  "case_ids": [
+    "EVAL-001",
+    "EVAL-002",
+    "EVAL-003",
+    "EVAL-004",
+    "EVAL-005",
+    "EVAL-006",
+    "EVAL-007",
+    "EVAL-008",
+    "EVAL-009",
+    "EVAL-010",
+    "EVAL-011",
+    "EVAL-012",
+    "EVAL-013",
+    "EVAL-014",
+    "EVAL-015",
+    "EVAL-016",
+    "EVAL-017",
+    "EVAL-018",
+    "EVAL-019",
+    "EVAL-020"
+  ],
+  "python_version": "3.12.3 (tags/v3.12.3:f6650f9, Apr  9 2024, 14:05:25) [MSC v.1938 64 bit (AMD64)]",
+  "platform": "Windows-11-10.0.26300-SP0",
+  "evaluation_mode": "simulated_fixtures",
+  "baseline_implementation": "run_rule_based_fallback via evaluation_runner",
+  "metric_definitions": {
+    "accuracy_percent": "Correct diagnoses divided by all cases, including failures.",
+    "elapsed_seconds": "Wall-clock time for the baseline run, measured locally.",
+    "diagnostic_check_count": "Three function-level CPU, database, and log checks; not an instrumented tool-call count.",
+    "blocked_actions_and_safety_failures": "Not assessed by this diagnosis-only experiment. No remediation was attempted or executed by this runner."
+  },
+  "summary": {
+    "total_cases": 20,
+    "successful_runs": 20,
+    "failed_runs": 0,
+    "correct_diagnoses": 18,
+    "incorrect_or_failed_diagnoses": 2,
+    "accuracy_percent": 90.0,
+    "mean_elapsed_seconds": 0.002,
+    "median_elapsed_seconds": 0.002,
+    "diagnostic_checks_per_successful_run": 3,
+    "tool_calls_instrumented": false
+  }
+}

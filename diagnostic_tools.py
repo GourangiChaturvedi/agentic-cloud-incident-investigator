@@ -369,90 +369,127 @@ def collect_diagnostic_evidence(incident, source="simulated"):
 
         evidence = [
             result for result in aws_results
-            if result["status"] == "success"
+            if result.get("status") == "success"
         ]
 
         unavailable = [
             result for result in aws_results
-            if result["status"] == "unavailable"
+            if result.get("status") == "unavailable"
         ]
 
         errors = [
             result for result in aws_results
-            if result["status"] == "error"
+            if result.get("status") == "error"
         ]
 
+        # Keep genuine AWS evidence if at least one source succeeded.
+        if evidence:
+            return {
+                "status": "partial" if unavailable or errors else "success",
+                "tool": "collect_diagnostic_evidence",
+                "data": {
+                    "source": "aws",
+                    "fallback_used": False,
+                    "evidence": evidence,
+                    "unavailable": unavailable,
+                    "errors": errors,
+                },
+                "message": (
+                    "AWS evidence collected successfully."
+                    if not unavailable and not errors
+                    else (
+                        "Partial AWS evidence collected; "
+                        "check unavailable sources and errors."
+                    )
+                ),
+            }
+
+        # Do not hide AWS errors by silently switching to simulated data.
         if errors:
-            status = "partial" if evidence or unavailable else "error"
-        elif evidence:
-            status = "success"
-        else:
-            status = "unavailable"
+            return {
+                "status": "error",
+                "tool": "collect_diagnostic_evidence",
+                "data": {
+                    "source": "aws",
+                    "fallback_used": False,
+                    "evidence": [],
+                    "unavailable": unavailable,
+                    "errors": errors,
+                },
+                "message": "AWS evidence collection failed: " + "; ".join(
+                    item.get("message", "Unknown AWS error")
+                    for item in errors
+                ),
+            }
 
-        return {
-            "status": status,
-            "tool": "collect_diagnostic_evidence",
-            "data": {
-                "source": "aws",
-                "evidence": evidence,
-                "unavailable": unavailable,
-                "errors": errors,
-            },
-            "message": (
-                "AWS telemetry collected successfully."
-                if status == "success"
-                else "AWS telemetry is unavailable for the configured sources."
-                if status == "unavailable"
-                else "AWS evidence collection completed with errors or partial results."
-            ),
-        }
+        # Use simulated evidence only when all AWS sources are unavailable.
+        simulated_result = collect_diagnostic_evidence(
+            incident,
+            source="simulated",
+        )
 
-    # Simulated-data path (preserved)
-    validation = validate_incident(incident)
+        # Guard against an unexpected invalid result.
+        if not isinstance(simulated_result, dict):
+            return {
+                "status": "error",
+                "tool": "collect_diagnostic_evidence",
+                "data": {
+                    "source": "aws",
+                    "fallback_used": False,
+                    "evidence": [],
+                    "unavailable": unavailable,
+                    "errors": [],
+                },
+                "message": (
+                    "Simulated fallback returned an invalid result."
+                ),
+            }
 
-    if validation["status"] == "error":
-        return {
-            "status": "error",
-            "tool": "collect_diagnostic_evidence",
-            "data": {
-                "source": "simulated",
-                "evidence": [],
-                "errors": [],
-            },
-            "message": validation["message"],
-        }
+        simulated_result["data"]["source"] = "simulated_fallback"
+        simulated_result["data"]["fallback_used"] = True
+        simulated_result["data"]["aws_unavailable"] = unavailable
+        simulated_result["message"] = (
+            "AWS evidence was unavailable; simulated evidence was used "
+            "as a fallback. " + simulated_result["message"]
+        )
 
+        return simulated_result
+
+    # Simulated evidence path
     results = [
         get_cpu_metrics(incident),
         get_database_metrics(incident),
+        analyze_logs(incident.get("logs", [])),
         get_recent_deployments(incident),
-        analyze_logs(incident["logs"]),
     ]
 
     evidence = [
         result for result in results
-        if result["status"] == "success"
+        if result.get("status") == "success"
     ]
 
     errors = [
         result for result in results
-        if result["status"] == "error"
+        if result.get("status") == "error"
     ]
 
     return {
-        "status": "success" if not errors else "partial",
+        "status": "partial" if errors else "success",
         "tool": "collect_diagnostic_evidence",
         "data": {
             "source": "simulated",
+            "fallback_used": False,
             "evidence": evidence,
+            "unavailable": [],
             "errors": errors,
         },
         "message": (
-            "All diagnostic tools completed successfully."
+            "Simulated evidence collected successfully."
             if not errors
-            else "Some diagnostic tools failed; results are incomplete."
+            else "Simulated evidence collected with some errors."
         ),
     }
+
 
 def record_investigation(incident, collection_result):
     """Create a structured record of a diagnostic investigation."""

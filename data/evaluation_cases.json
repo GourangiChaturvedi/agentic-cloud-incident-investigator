@@ -1,0 +1,183 @@
+
+[
+  {
+    "incident_id": "EVAL-001",
+    "incident_type": "high_cpu",
+    "cpu_usage_percent": 96,
+    "database_connections": 35,
+    "recent_deployment": true,
+    "logs": ["CPU utilization exceeded 90%", "Repeated request timeouts detected", "Application response time increased"],
+    "expected_root_cause": "Possible application overload"
+  },
+  {
+    "incident_id": "EVAL-002",
+    "incident_type": "high_cpu",
+    "cpu_usage_percent": 93,
+    "database_connections": 25,
+    "recent_deployment": false,
+    "logs": ["CPU utilization exceeded 90%", "Application response time increased"],
+    "expected_root_cause": "Possible application overload"
+  },
+  {
+    "incident_id": "EVAL-003",
+    "incident_type": "high_cpu",
+    "cpu_usage_percent": 99,
+    "database_connections": 40,
+    "recent_deployment": false,
+    "logs": ["High CPU utilization detected", "Repeated request timeouts detected"],
+    "expected_root_cause": "Possible application overload"
+  },
+  {
+    "incident_id": "EVAL-004",
+    "incident_type": "high_cpu",
+    "cpu_usage_percent": 91,
+    "database_connections": 55,
+    "recent_deployment": true,
+    "logs": ["CPU utilization exceeded 90%", "Application response time increased"],
+    "expected_root_cause": "Possible application overload"
+  },
+  {
+    "incident_id": "EVAL-005",
+    "incident_type": "database_pressure",
+    "cpu_usage_percent": 45,
+    "database_connections": 95,
+    "recent_deployment": false,
+    "logs": ["Database connection limit nearly reached"],
+    "expected_root_cause": "Database connection pressure"
+  },
+  {
+    "incident_id": "EVAL-006",
+    "incident_type": "database_pressure",
+    "cpu_usage_percent": 30,
+    "database_connections": 88,
+    "recent_deployment": false,
+    "logs": ["Database connection pressure detected"],
+    "expected_root_cause": "Database connection pressure"
+  },
+  {
+    "incident_id": "EVAL-007",
+    "incident_type": "database_pressure",
+    "cpu_usage_percent": 65,
+    "database_connections": 110,
+    "recent_deployment": true,
+    "logs": ["Database connection limit nearly reached", "Database response time increased"],
+    "expected_root_cause": "Database connection pressure"
+  },
+  {
+    "incident_id": "EVAL-008",
+    "incident_type": "database_pressure",
+    "cpu_usage_percent": 50,
+    "database_connections": 99,
+    "recent_deployment": false,
+    "logs": ["Database connection usage elevated"],
+    "expected_root_cause": "Database connection pressure"
+  },
+  {
+    "incident_id": "EVAL-009",
+    "incident_type": "combined_pressure",
+    "cpu_usage_percent": 96,
+    "database_connections": 95,
+    "recent_deployment": false,
+    "logs": ["CPU utilization exceeded 90%", "Database connection limit nearly reached"],
+    "expected_root_cause": "Combined CPU and database connection pressure"
+  },
+  {
+    "incident_id": "EVAL-010",
+    "incident_type": "combined_pressure",
+    "cpu_usage_percent": 99,
+    "database_connections": 120,
+    "recent_deployment": true,
+    "logs": ["Repeated request timeouts detected", "Database response time increased"],
+    "expected_root_cause": "Combined CPU and database connection pressure"
+  },
+  {
+    "incident_id": "EVAL-011",
+    "incident_type": "combined_pressure",
+    "cpu_usage_percent": 92,
+    "database_connections": 85,
+    "recent_deployment": false,
+    "logs": ["CPU utilization exceeded 90%", "Database connection usage elevated"],
+    "expected_root_cause": "Combined CPU and database connection pressure"
+  },
+  {
+    "incident_id": "EVAL-012",
+    "incident_type": "combined_pressure",
+    "cpu_usage_percent": 95,
+    "database_connections": 105,
+    "recent_deployment": true,
+    "logs": ["Application response time increased", "Database connection limit nearly reached"],
+    "expected_root_cause": "Combined CPU and database connection pressure"
+  },
+  {
+    "incident_id": "EVAL-013",
+    "incident_type": "normal",
+    "cpu_usage_percent": 25,
+    "database_connections": 20,
+    "recent_deployment": false,
+    "logs": ["Application health check successful", "Application operating normally"],
+    "expected_root_cause": "No major issue"
+  },
+  {
+    "incident_id": "EVAL-014",
+    "incident_type": "normal",
+    "cpu_usage_percent": 40,
+    "database_connections": 30,
+    "recent_deployment": false,
+    "logs": ["Service healthy", "No errors reported"],
+    "expected_root_cause": "No major issue"
+  },
+  {
+    "incident_id": "EVAL-015",
+    "incident_type": "normal",
+    "cpu_usage_percent": 15,
+    "database_connections": 10,
+    "recent_deployment": true,
+    "logs": ["Application operating normally", "Health check successful"],
+    "expected_root_cause": "No major issue"
+  },
+  {
+    "incident_id": "EVAL-016",
+    "incident_type": "normal",
+    "cpu_usage_percent": 70,
+    "database_connections": 60,
+    "recent_deployment": false,
+    "logs": ["Service healthy", "No matching errors reported"],
+    "expected_root_cause": "No major issue"
+  },
+  {
+    "incident_id": "EVAL-017",
+    "incident_type": "unknown",
+    "cpu_usage_percent": 45,
+    "database_connections": 30,
+    "recent_deployment": false,
+    "logs": ["External dependency response time increased"],
+    "expected_root_cause": "Inconclusive"
+  },
+  {
+    "incident_id": "EVAL-018",
+    "incident_type": "unknown",
+    "cpu_usage_percent": 35,
+    "database_connections": 40,
+    "recent_deployment": false,
+    "logs": ["Intermittent request timeouts detected"],
+    "expected_root_cause": "Inconclusive"
+  },
+  {
+    "incident_id": "EVAL-019",
+    "incident_type": "unknown",
+    "cpu_usage_percent": 60,
+    "database_connections": 50,
+    "recent_deployment": true,
+    "logs": ["External service error reported"],
+    "expected_root_cause": "Inconclusive"
+  },
+  {
+    "incident_id": "EVAL-020",
+    "incident_type": "unknown",
+    "cpu_usage_percent": 20,
+    "database_connections": 15,
+    "recent_deployment": false,
+    "logs": ["Intermittent service error reported"],
+    "expected_root_cause": "Inconclusive"
+  }
+]
