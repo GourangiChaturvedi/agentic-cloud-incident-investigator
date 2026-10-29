@@ -90,6 +90,7 @@ STATE_DEFAULTS = {
     "remediation_proposal": None,
     "remediation_decision": None,
     "active_investigation_id": None,
+    "proposal_investigation_id": None,
 }
 
 for key, default_value in STATE_DEFAULTS.items():
@@ -210,11 +211,8 @@ if st.button("🔍 Investigate Incident", type="primary"):
                 )
             )
 
-        # Generate a unique ID for this specific investigation run.
         investigation_id = str(uuid.uuid4())
 
-        # Replace the displayed investigation and clear the previous
-        # proposal/decision only after this investigation succeeds.
         st.session_state["investigation_display"] = {
             "investigation_id": investigation_id,
             "incident_id": incident["incident_id"],
@@ -227,6 +225,7 @@ if st.button("🔍 Investigate Incident", type="primary"):
         st.session_state["active_investigation_id"] = investigation_id
         st.session_state["remediation_proposal"] = None
         st.session_state["remediation_decision"] = None
+        st.session_state["proposal_investigation_id"] = None
 
         progress.progress(100, text="Investigation finished")
         activity.update(
@@ -489,7 +488,9 @@ if display is not None:
         st.metric("Evidence Sources", len(evidence))
 
     if errors:
-        st.warning("Some diagnostic tools failed. Interpret the results cautiously.")
+        st.warning(
+            "Some diagnostic tools failed. Interpret the results cautiously."
+        )
 
     if collection_data.get("unavailable"):
         st.warning(
@@ -580,13 +581,28 @@ if display is not None:
     else:
         cause = "Inconclusive"
         confidence = "Low"
-        uncertainty = "The available evidence does not establish a probable root cause."
+        uncertainty = (
+            "The available evidence does not establish a probable root cause."
+        )
 
-    # Only a successful Bedrock diagnosis may inform the diagnosis shown.
-    if agent_status == "success" and isinstance(agent_diagnosis, dict):
+    if (
+        source_label != "aws"
+        and agent_status == "success"
+        and isinstance(agent_diagnosis, dict)
+    ):
         cause = agent_diagnosis.get("probable_root_cause", cause)
-        confidence = str(agent_diagnosis.get("confidence", confidence)).title()
+        confidence = str(
+            agent_diagnosis.get("confidence", confidence)
+        ).title()
         uncertainty = agent_diagnosis.get("uncertainty", uncertainty)
+
+    elif source_label == "aws" and agent_status == "success":
+        st.info(
+            "The Bedrock agent result is shown separately because its input "
+            "includes the simulated incident payload. The diagnosis below "
+            "is based on the source-aware AWS evidence and does not treat "
+            "simulated CPU, database, or deployment values as live telemetry."
+        )
 
     # --------------------------------------------------
     # Proposal lifecycle: one proposal per investigation ID
@@ -599,8 +615,13 @@ if display is not None:
 
     if proposal is None or proposal_investigation_id != investigation_id:
         try:
+            # Pass the ID into remediation.py so new audit records are linked.
             proposal = propose_remediation(
-                {"probable_root_cause": cause}
+                {
+                    "probable_root_cause": cause,
+                    "investigation_id": investigation_id,
+                },
+                investigation_id=investigation_id,
             )
 
             st.session_state["remediation_proposal"] = proposal
@@ -761,7 +782,9 @@ if display is not None:
         )
 
     if source_label == "aws" and aws_events:
-        support.append(f"Retrieved {len(aws_events)} live CloudWatch log events.")
+        support.append(
+            f"Retrieved {len(aws_events)} live CloudWatch log events."
+        )
     elif source_label != "aws" and simulated_log_result:
         support.extend(
             finding for finding in findings
@@ -804,7 +827,9 @@ if display is not None:
             )
 
         if not aws_events:
-            alternatives.append("Application log evidence is missing or unavailable.")
+            alternatives.append(
+                "Application log evidence is missing or unavailable."
+            )
 
         if not alternatives:
             alternatives.append(
@@ -858,7 +883,6 @@ st.subheader("Remediation Recommendation")
 proposal = st.session_state.get("remediation_proposal")
 display = st.session_state.get("investigation_display")
 
-# Prevent showing a proposal for a different investigation.
 if (
     display is None
     or proposal is None
@@ -901,20 +925,34 @@ else:
         approve_col, reject_col = st.columns(2)
 
         with approve_col:
-            if st.button("Approve Recommendation", key="approve_remediation"):
+            if st.button(
+                "Approve Recommendation",
+                key="approve_remediation",
+            ):
                 try:
                     st.session_state["remediation_decision"] = (
-                        record_approval(proposal, True)
+                        record_approval(
+                            proposal,
+                            True,
+                            investigation_id=display["investigation_id"],
+                        )
                     )
                     st.rerun()
                 except Exception as exc:
                     st.error(f"Approval could not be recorded: {exc}")
 
         with reject_col:
-            if st.button("Reject Recommendation", key="reject_remediation"):
+            if st.button(
+                "Reject Recommendation",
+                key="reject_remediation",
+            ):
                 try:
                     st.session_state["remediation_decision"] = (
-                        record_approval(proposal, False)
+                        record_approval(
+                            proposal,
+                            False,
+                            investigation_id=display["investigation_id"],
+                        )
                     )
                     st.rerun()
                 except Exception as exc:
@@ -937,22 +975,173 @@ st.divider()
 st.subheader("Remediation Audit Trail")
 
 audit_file = Path(__file__).with_name("remediation_audit.jsonl")
+display = st.session_state.get("investigation_display")
+current_investigation_id = (
+    display.get("investigation_id") if display else None
+)
+
+
+def extract_audit_details(record):
+    """Return audit details as a dictionary without assuming a fixed schema."""
+    details = record.get("details", {})
+    return details if isinstance(details, dict) else {}
+
+
+def audit_matches_investigation(record, investigation_id):
+    """Match only explicit investigation-ID fields; never infer a match."""
+    if not investigation_id:
+        return False
+
+    details = extract_audit_details(record)
+
+    possible_ids = [
+        record.get("investigation_id"),
+        details.get("investigation_id"),
+        record.get("related_investigation_id"),
+        details.get("related_investigation_id"),
+    ]
+
+    return investigation_id in possible_ids
+
+
+def audit_display_value(value):
+    """Format nested audit values for a compact table."""
+    if value is None:
+        return ""
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False)
+    return str(value)
+
 
 if audit_file.exists():
-    with audit_file.open("r", encoding="utf-8") as file:
-        audit_lines = [line.strip() for line in file if line.strip()]
+    try:
+        with audit_file.open("r", encoding="utf-8") as file:
+            audit_lines = [
+                line.strip()
+                for line in file
+                if line.strip()
+            ]
+    except OSError as exc:
+        audit_lines = []
+        st.error(f"Could not read the audit log: {exc}")
 
     audit_records = []
+    invalid_count = 0
 
     for line in audit_lines:
         try:
-            audit_records.append(json.loads(line))
+            record = json.loads(line)
+            if isinstance(record, dict):
+                audit_records.append(record)
+            else:
+                invalid_count += 1
         except json.JSONDecodeError:
-            st.warning("An invalid audit log entry was skipped.")
+            invalid_count += 1
+
+    audit_records.reverse()
+
+    if invalid_count:
+        st.warning(
+            f"{invalid_count} invalid audit record(s) were skipped."
+        )
 
     if audit_records:
-        st.json(audit_records[-10:])
+        st.caption(
+            f"{len(audit_records)} valid audit event(s) loaded. "
+            "The source file is left unchanged."
+        )
+
+        filter_options = [
+            "All events",
+            "Current investigation only",
+        ]
+
+        selected_filter = st.radio(
+            "Audit history filter",
+            options=filter_options,
+            horizontal=True,
+            key="audit_history_filter",
+            disabled=current_investigation_id is None,
+            help=(
+                "Investigation filtering uses explicit IDs stored in audit "
+                "records. Older events without an ID are not assigned to "
+                "the current investigation."
+            ),
+        )
+
+        if selected_filter == "Current investigation only":
+            filtered_records = [
+                record
+                for record in audit_records
+                if audit_matches_investigation(
+                    record,
+                    current_investigation_id,
+                )
+            ]
+
+            st.caption(
+                f"Current investigation: {current_investigation_id}"
+            )
+
+            if not filtered_records:
+                st.info(
+                    "No audit events explicitly reference this investigation. "
+                    "Existing records may not store an investigation ID. "
+                    "Choose 'All events' to view the complete available history."
+                )
+        else:
+            filtered_records = audit_records
+
+        if filtered_records:
+            table_rows = []
+
+            for record in filtered_records:
+                details = extract_audit_details(record)
+
+                timestamp = record.get(
+                    "timestamp",
+                    record.get("created_at", ""),
+                )
+
+                table_rows.append({
+                    "Timestamp": audit_display_value(timestamp),
+                    "Event": audit_display_value(
+                        record.get("event", "unknown")
+                    ),
+                    "Investigation ID": audit_display_value(
+                        record.get("investigation_id")
+                        or details.get("investigation_id")
+                        or record.get("related_investigation_id")
+                        or details.get("related_investigation_id")
+                        or "Not recorded"
+                    ),
+                    "Action ID": audit_display_value(
+                        record.get("action_id")
+                        or details.get("action_id")
+                        or "Not recorded"
+                    ),
+                    "Approval outcome": audit_display_value(
+                        record.get("approval_status")
+                        or details.get("approval_status")
+                        or "—"
+                    ),
+                    "Executed": audit_display_value(
+                        record.get("executed")
+                        if "executed" in record
+                        else details.get("executed", "Not recorded")
+                    ),
+                })
+
+            st.dataframe(
+                table_rows,
+                use_container_width=True,
+                hide_index=True,
+            )
+
+        with st.expander("View raw audit records"):
+            st.json(filtered_records)
+
     else:
-        st.info("No audit events recorded yet.")
+        st.info("No valid audit events recorded yet.")
 else:
     st.info("The audit log has not been created yet.")
